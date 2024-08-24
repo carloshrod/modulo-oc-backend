@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { sequelize } from "../database/database.js";
+import { Oeuvre } from "../models/Oeuvre.js";
 
 const router = Router();
 
@@ -14,6 +15,17 @@ router.use("/api/v1/ping", async (_req, res) => {
       apiSays: "Server status is OK!",
       PostgreSays: "Database connection is OK!",
     });
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+router.get("/api/v1/oeuvres", async (req, res) => {
+  try {
+    const oeuvres = await Oeuvre.findAll({
+      attributes: ["id", "oeuvre_name"],
+    });
+    res.json(oeuvres);
   } catch (error) {
     console.error(error);
   }
