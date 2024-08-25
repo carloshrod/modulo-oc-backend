@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { sequelize } from "../database/database.js";
 import { Oeuvre } from "../models/Oeuvre.js";
+import purchaseOrdersRouter from "./purchaseOrders.routes.js";
+import generalItemRouter from "./generalItems.routes.js";
 
 const router = Router();
 
@@ -8,7 +10,7 @@ router.get("/", (_req, res) => {
   res.send("Módulo OC - Backend");
 });
 
-router.use("/api/v1/ping", async (_req, res) => {
+router.get("/api/v1/ping", async (_req, res) => {
   try {
     await sequelize.authenticate();
     return res.status(200).send({
@@ -30,5 +32,7 @@ router.get("/api/v1/oeuvres", async (req, res) => {
     console.error(error);
   }
 });
+
+router.use("/api/v1/general-items", generalItemRouter);
 
 export default router;
