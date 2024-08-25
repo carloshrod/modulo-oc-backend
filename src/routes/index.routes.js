@@ -3,6 +3,7 @@ import { sequelize } from "../database/database.js";
 import { Oeuvre } from "../models/Oeuvre.js";
 import purchaseOrdersRouter from "./purchaseOrders.routes.js";
 import generalItemRouter from "./generalItems.routes.js";
+import { Supplier } from "../models/Supplier.js";
 
 const router = Router();
 
@@ -30,9 +31,21 @@ router.get("/api/v1/oeuvres", async (req, res) => {
     res.json(oeuvres);
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get("/api/v1/suppliers", async (req, res) => {
+  try {
+    const suppliers = await Supplier.findAll();
+    res.json(suppliers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
   }
 });
 
 router.use("/api/v1/general-items", generalItemRouter);
+router.use("/api/v1/purchase-orders", purchaseOrdersRouter);
 
 export default router;
