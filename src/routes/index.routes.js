@@ -4,6 +4,8 @@ import { Oeuvre } from "../models/Oeuvre.js";
 import purchaseOrdersRouter from "./purchaseOrders.routes.js";
 import generalItemRouter from "./generalItems.routes.js";
 import { Supplier } from "../models/Supplier.js";
+import { AccountCost } from "../models/AccountCost.js";
+import { FamiliesAccountCost } from "../models/FamiliesAccountCost.js";
 
 const router = Router();
 
@@ -23,7 +25,7 @@ router.get("/api/v1/ping", async (_req, res) => {
   }
 });
 
-router.get("/api/v1/oeuvres", async (req, res) => {
+router.get("/api/v1/oeuvres", async (_req, res) => {
   try {
     const oeuvres = await Oeuvre.findAll({
       attributes: ["id", "oeuvre_name"],
@@ -35,10 +37,32 @@ router.get("/api/v1/oeuvres", async (req, res) => {
   }
 });
 
-router.get("/api/v1/suppliers", async (req, res) => {
+router.get("/api/v1/suppliers", async (_req, res) => {
   try {
     const suppliers = await Supplier.findAll();
     res.json(suppliers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get("/api/v1/account-costs", async (_req, res) => {
+  try {
+    const accountCosts = await FamiliesAccountCost.findAll({
+      attributes: [
+        "id",
+        [sequelize.col("families_account_costs.name"), "family_name"],
+      ],
+      include: [
+        {
+          model: AccountCost,
+          attributes: ["id", "name"],
+          as: "accounts",
+        },
+      ],
+    });
+    res.json(accountCosts);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });

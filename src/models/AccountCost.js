@@ -2,6 +2,7 @@ import { DataTypes } from "sequelize";
 import { sequelize } from "../database/database.js";
 import { PurchaseOrderItem } from "./PurchaseOrderItem.js";
 import { User } from "./User.js";
+import { FamiliesAccountCost } from "./FamiliesAccountCost.js";
 
 export const AccountCost = sequelize.define(
   "account_costs",
@@ -60,4 +61,9 @@ AccountCost.belongsTo(User, {
   foreignKey: "user_update",
   as: "updatedBy",
   targetKey: "id",
+});
+
+FamiliesAccountCost.hasMany(AccountCost, {
+  foreignKey: "id_family",
+  as: "accounts",
 });
