@@ -2,6 +2,7 @@ import { DataTypes } from "sequelize";
 import { sequelize } from "../database/database.js";
 import { PurchaseOrder } from "./PurchaseOrder.js";
 import { User } from "./User.js";
+import { Approver } from "./Approver.js";
 
 export const Oeuvre = sequelize.define(
   "oeuvres",
@@ -91,12 +92,14 @@ export const Oeuvre = sequelize.define(
 
 Oeuvre.hasMany(PurchaseOrder, {
   foreignKey: "oeuvre_id",
+  as: "purchaseOrders",
   sourceKey: "id",
 });
 
 PurchaseOrder.belongsTo(Oeuvre, {
   foreignKey: "oeuvre_id",
-  targetId: "id",
+  as: "oeuvre",
+  targetKey: "id",
 });
 
 Oeuvre.belongsTo(User, {
@@ -109,4 +112,10 @@ Oeuvre.belongsTo(User, {
   foreignKey: "user_update",
   as: "updatedBy",
   targetKey: "id",
+});
+
+Oeuvre.hasMany(Approver, {
+  foreignKey: "id_oeuvre",
+  as: "approvers",
+  sourceKey: "id",
 });

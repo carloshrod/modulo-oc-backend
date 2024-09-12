@@ -48,7 +48,7 @@ Supplier.hasMany(PurchaseOrder, {
 
 PurchaseOrder.belongsTo(Supplier, {
   foreignKey: "supplier_id",
-  targetId: "id",
+  targetKey: "id",
 });
 
 Supplier.belongsTo(User, {

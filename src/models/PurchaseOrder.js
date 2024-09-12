@@ -2,6 +2,8 @@ import { DataTypes } from "sequelize";
 import { sequelize } from "../database/database.js";
 import { PurchaseOrderItem } from "./PurchaseOrderItem.js";
 import { User } from "./User.js";
+import { ApprovalEvent } from "./ApprovalEvent.js";
+import { Approver } from "./Approver.js";
 
 export const PurchaseOrder = sequelize.define(
   "purchase_orders",
@@ -15,6 +17,9 @@ export const PurchaseOrder = sequelize.define(
       type: DataTypes.STRING,
       unique: true,
     },
+    name: {
+      type: DataTypes.STRING,
+    },
     gloss: {
       type: DataTypes.STRING,
     },
@@ -27,6 +32,12 @@ export const PurchaseOrder = sequelize.define(
     currency_type: {
       type: DataTypes.STRING,
     },
+    exchange_rate: {
+      type: DataTypes.DECIMAL,
+    },
+    discount: {
+      type: DataTypes.DECIMAL,
+    },
     net_total: {
       type: DataTypes.DECIMAL,
     },
@@ -36,10 +47,16 @@ export const PurchaseOrder = sequelize.define(
     total: {
       type: DataTypes.DECIMAL,
     },
+    current_approver_id: {
+      type: DataTypes.INTEGER,
+    },
     status: {
       type: DataTypes.STRING,
     },
     approval_date: {
+      type: DataTypes.DATE,
+    },
+    reception_date: {
       type: DataTypes.DATE,
     },
     reception_date: {
@@ -54,8 +71,17 @@ export const PurchaseOrder = sequelize.define(
 );
 
 PurchaseOrder.hasMany(PurchaseOrderItem, {
+  as: "items",
   foreignKey: "purchase_order_id",
   sourceKey: "id",
+  onDelete: "CASCADE",
+});
+
+PurchaseOrder.hasMany(ApprovalEvent, {
+  as: "events",
+  foreignKey: "purchase_order_id",
+  sourceKey: "id",
+  onDelete: "CASCADE",
 });
 
 PurchaseOrder.belongsTo(User, {
@@ -67,5 +93,11 @@ PurchaseOrder.belongsTo(User, {
 PurchaseOrder.belongsTo(User, {
   foreignKey: "user_update",
   as: "updatedBy",
+  targetKey: "id",
+});
+
+PurchaseOrder.belongsTo(Approver, {
+  as: "current_approver",
+  foreignKey: "current_approver_id",
   targetKey: "id",
 });

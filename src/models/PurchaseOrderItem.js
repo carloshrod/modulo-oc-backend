@@ -1,6 +1,7 @@
 import { DataTypes } from "sequelize";
 import { sequelize } from "../database/database.js";
 import { GeneralItem } from "./GeneralItem.js";
+import { AccountCost } from "./AccountCost.js";
 
 export const PurchaseOrderItem = sequelize.define(
   "purchase_order_items",
@@ -42,12 +43,12 @@ export const PurchaseOrderItem = sequelize.define(
   }
 );
 
-// PurchaseOrderItem.belongsTo(PurchaseOrder, {
-//   foreignKey: "purchase_order_id",
-//   targetkey: "id",
-// });
-
 PurchaseOrderItem.belongsTo(GeneralItem, {
   foreignKey: "general_item_id",
+  targetkey: "id",
+});
+
+PurchaseOrderItem.belongsTo(AccountCost, {
+  foreignKey: "account_costs_id",
   targetkey: "id",
 });
