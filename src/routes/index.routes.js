@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { sequelize } from "../database/database.js";
-import { Oeuvre } from "../models/Oeuvre.js";
 import purchaseOrdersRouter from "./purchaseOrders.routes.js";
 import generalItemRouter from "./generalItems.routes.js";
+import oeuvreRouter from "./oeuvre.routes.js";
 import { Supplier } from "../models/Supplier.js";
 import { AccountCost } from "../models/AccountCost.js";
 import { FamiliesAccountCost } from "../models/FamiliesAccountCost.js";
@@ -22,18 +22,6 @@ router.get("/api/v1/ping", async (_req, res) => {
     });
   } catch (error) {
     console.error(error);
-  }
-});
-
-router.get("/api/v1/oeuvres", async (_req, res) => {
-  try {
-    const oeuvres = await Oeuvre.findAll({
-      attributes: ["id", "oeuvre_name"],
-    });
-    res.json(oeuvres);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
   }
 });
 
@@ -69,6 +57,7 @@ router.get("/api/v1/account-costs", async (_req, res) => {
   }
 });
 
+router.use("/api/v1/oeuvres", oeuvreRouter);
 router.use("/api/v1/general-items", generalItemRouter);
 router.use("/api/v1/purchase-orders", purchaseOrdersRouter);
 
