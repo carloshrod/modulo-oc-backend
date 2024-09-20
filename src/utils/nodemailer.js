@@ -9,6 +9,6 @@ export const transporter = nodemailer.createTransport({
     pass: process.env.PASSWORD,
   },
   tls: {
-    rejectUnauthorized: false, // Remover en producción
+    rejectUnauthorized: process.env.NODE_ENV === "production",
   },
 });

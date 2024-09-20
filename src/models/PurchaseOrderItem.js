@@ -11,6 +11,10 @@ export const PurchaseOrderItem = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
+    general_item_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
     description: {
       type: DataTypes.STRING,
     },
@@ -34,6 +38,10 @@ export const PurchaseOrderItem = sequelize.define(
     },
     receipt_status: {
       type: DataTypes.STRING,
+    },
+    purchase_order_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
   },
   {

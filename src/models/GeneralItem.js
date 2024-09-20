@@ -12,9 +12,20 @@ export const GeneralItem = sequelize.define(
     },
     sku: {
       type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
     },
     name: {
       type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+    },
+    user_create: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    user_update: {
+      type: DataTypes.INTEGER,
     },
   },
   {

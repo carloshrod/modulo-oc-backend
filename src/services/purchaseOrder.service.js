@@ -53,8 +53,8 @@ export const sendPurchaseOrderForApprovalService = async (
         from: `"Admin" ${process.env.EMAIL}`,
         to: currentApprover.user.email,
         subject: "Notificación de Aprobación de Orden de Compra",
-        html: `Hola ${currentApprover?.user?.full_name} - ${currentApprover?.approver_role},<br><br>
-          Tienes una orden de compra para aprobar. Por favor, revisa la OC con ID: ${purchaseOrder.id}.<br><br>
+        html: `Hola ${currentApprover?.user?.full_name},<br><br>
+          Tienes una orden de compra para aprobar. Por favor, revisa la <strong>${purchaseOrder.number}</strong>.<br><br>
           Gracias,<br>El equipo de administración.`,
       };
 

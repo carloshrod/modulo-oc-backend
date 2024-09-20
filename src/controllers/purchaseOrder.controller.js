@@ -9,6 +9,7 @@ import { ApprovalEvent } from "../models/ApprovalEvent.js";
 import { User } from "../models/User.js";
 import { Approver } from "../models/Approver.js";
 import { sequelize } from "../database/database.js";
+import { validatePoItems } from "../utils/validatePoItems.js";
 
 export const savePurchaseOrder = async (req, res) => {
   try {
@@ -40,6 +41,10 @@ export const savePurchaseOrder = async (req, res) => {
       newOrderNumber = `OC-${oeuvre.ceco_code}-1`;
     }
 
+    if (!newOrderNumber) {
+      throw new Error("Error al generar el número de la orden de compra");
+    }
+
     const newPurchaseOrder = await PurchaseOrder.create({
       ...rest,
       number: newOrderNumber,
@@ -52,18 +57,15 @@ export const savePurchaseOrder = async (req, res) => {
 
     let itemIds = [];
     if (items?.length > 0) {
-      const validItems = items.filter((item) =>
-        Object.values(item).some(
-          (value) => value !== undefined && value !== null && value !== 0
-        )
-      );
+      const validItems = validatePoItems(items);
 
-      if (validItems.length > 0) {
+      if (validItems?.length > 0) {
         await Promise.all(
           items.map(async (item) => {
             const newItem = await PurchaseOrderItem.create({
               ...item,
               purchase_order_id: newPurchaseOrder.id,
+              subtotal: item.subtotal === 0 ? undefined : item.subtotal,
             });
             itemIds.push(newItem.id);
             return newItem;
@@ -71,8 +73,6 @@ export const savePurchaseOrder = async (req, res) => {
         );
       }
     }
-
-    await newPurchaseOrder.update({ items: itemIds });
 
     if (itemIds?.length > 0 && status === "En revisión") {
       const response = await sendPurchaseOrderForApprovalService(
@@ -119,19 +119,23 @@ export const updatePurchaseOrder = async (req, res) => {
 
     let itemIds = [];
     if (items?.length > 0) {
-      for (const item of items) {
-        if (item.id) {
-          await PurchaseOrderItem.update(
-            { ...item },
-            { where: { id: item.id } }
-          );
-          itemIds.push(item.id);
-        } else {
-          const newItem = await PurchaseOrderItem.create({
-            ...item,
-            purchase_order_id: purchaseOrder.id,
-          });
-          itemIds.push(newItem.id);
+      const validItems = validatePoItems(items);
+
+      if (validItems?.length > 0) {
+        for (const item of validItems) {
+          if (item?.id) {
+            await PurchaseOrderItem.update(
+              { ...item },
+              { where: { id: item.id } }
+            );
+            itemIds.push(item.id);
+          } else {
+            const newItem = await PurchaseOrderItem.create({
+              ...item,
+              purchase_order_id: purchaseOrder.id,
+            });
+            itemIds.push(newItem.id);
+          }
         }
       }
     } else {
@@ -252,6 +256,8 @@ export const getPurchaseOrderByNumber = async (req, res) => {
     const { poNumber } = req.params;
     const includeEvents = req.query.includeEvents === "true";
 
+    console.log({ poNumber });
+
     const purchaseOrder = await PurchaseOrder.findOne({
       where: { number: poNumber.replace("oc", "OC") },
       attributes: [
@@ -340,17 +346,15 @@ export const getPurchaseOrderByNumber = async (req, res) => {
       result.current_approver = result.current_approver.user_id;
     }
 
-    console.log(result);
-
     if (result.items) {
       result.items = result.items.map((item) => {
         const { general_item, account_cost, ...rest } = item;
 
         return {
           ...rest,
-          item_name: item.general_item.name,
-          item_sku: item.general_item.sku,
-          account_cost_name: item.account_cost.name,
+          item_name: item.general_item?.name,
+          item_sku: item.general_item?.sku,
+          account_cost_name: item.account_cost?.name,
         };
       });
     }
@@ -361,34 +365,6 @@ export const getPurchaseOrderByNumber = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-// export const getPurchaseOrderItems = async (req, res) => {
-//   try {
-//     const { purchaseOrderId } = req.params;
-
-//     const purchaseOrderItems = await PurchaseOrderItem.findAll({
-//       where: { purchase_order_id: purchaseOrderId },
-//       include: [
-//         {
-//           model: GeneralItem,
-//           attributes: [
-//             ["name", "name"],
-//             ["sku", "sku"],
-//           ],
-//         },
-//         {
-//           model: AccountCost,
-//           attributes: [["name", "name"]],
-//         },
-//       ],
-//     });
-
-//     return res.status(200).json(purchaseOrderItems);
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 export const deletePurchaseOrder = async (req, res) => {
   try {

@@ -12,15 +12,19 @@ export const Approver = sequelize.define(
     },
     is_active: {
       type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
     },
     user_id: {
       type: DataTypes.INTEGER,
+      allowNull: false,
     },
     user_update: {
       type: DataTypes.INTEGER,
     },
     approver_role: {
       type: DataTypes.STRING,
+      allowNull: false,
     },
   },
   {

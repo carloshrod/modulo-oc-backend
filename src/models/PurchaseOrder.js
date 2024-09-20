@@ -16,6 +16,7 @@ export const PurchaseOrder = sequelize.define(
     number: {
       type: DataTypes.STRING,
       unique: true,
+      allowNull: false,
     },
     name: {
       type: DataTypes.STRING,
@@ -51,7 +52,14 @@ export const PurchaseOrder = sequelize.define(
       type: DataTypes.INTEGER,
     },
     status: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM(
+        "Borrador",
+        "En revisión",
+        "Aprobada",
+        "Rechazada",
+        "Cerrada"
+      ),
+      allowNull: false,
     },
     approval_date: {
       type: DataTypes.DATE,
@@ -59,8 +67,19 @@ export const PurchaseOrder = sequelize.define(
     reception_date: {
       type: DataTypes.DATE,
     },
-    reception_date: {
-      type: DataTypes.DATE,
+    user_create: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    user_update: {
+      type: DataTypes.INTEGER,
+    },
+    oeuvre_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    supplier_id: {
+      type: DataTypes.INTEGER,
     },
   },
   {

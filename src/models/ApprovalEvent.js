@@ -13,6 +13,11 @@ export const ApprovalEvent = sequelize.define(
     },
     status: {
       type: DataTypes.STRING,
+      allowNull: false,
+    },
+    author: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
   },
   {
