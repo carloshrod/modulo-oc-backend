@@ -256,8 +256,6 @@ export const getPurchaseOrderByNumber = async (req, res) => {
     const { poNumber } = req.params;
     const includeEvents = req.query.includeEvents === "true";
 
-    console.log({ poNumber });
-
     const purchaseOrder = await PurchaseOrder.findOne({
       where: { number: poNumber.replace("oc", "OC") },
       attributes: [
@@ -314,6 +312,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
               attributes: ["name"],
             },
           ],
+          order: [["created_at", "ASC"]],
           required: false,
         },
       ],
@@ -366,21 +365,24 @@ export const getPurchaseOrderByNumber = async (req, res) => {
   }
 };
 
-export const deletePurchaseOrder = async (req, res) => {
+export const cancelPurchaseOrder = async (req, res) => {
   try {
-    const { purchaseOrderId } = req.params;
+    const { id } = req.params;
+    const { canceledBy } = req.body;
 
-    const deletedCount = await PurchaseOrder.destroy({
-      where: { id: purchaseOrderId },
-    });
-
-    if (deletedCount === 0) {
-      return res.status(404).json({ message: "Purchase order not found" });
+    const purchaseOrder = await PurchaseOrder.findByPk(id);
+    if (!purchaseOrder) {
+      return res.status(404).json({ message: "Orden de compra no encontrada" });
     }
 
+    const newStatus =
+      purchaseOrder.status === "Borrador" ? "Cancelada" : "Cerrada";
+
+    await purchaseOrder.update({ user_update: canceledBy, status: newStatus });
+
     return res.status(200).json({
-      message: "Orden de compra eliminada exitosamente",
-      deletedCount: deletedCount,
+      newStatus,
+      message: `Orden de compra ${newStatus?.toLocaleLowerCase()} exitosamente`,
     });
   } catch (error) {
     console.error(error);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  deletePurchaseOrder,
+  cancelPurchaseOrder,
   getPurchaseOrderByNumber,
   getPurchaseOrdersByOeuvre,
   savePurchaseOrder,
@@ -16,6 +16,6 @@ router.put("/:id", validatePurchaseOrder, updatePurchaseOrder);
 router.patch("/:id", sendPurchaseOrderForApproval);
 router.get("/:oeuvreId", getPurchaseOrdersByOeuvre);
 router.get("/po-number/:poNumber", getPurchaseOrderByNumber);
-router.delete("/:purchaseOrderId", deletePurchaseOrder);
+router.delete("/:id", cancelPurchaseOrder);
 
 export default router;

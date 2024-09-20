@@ -57,7 +57,8 @@ export const PurchaseOrder = sequelize.define(
         "En revisión",
         "Aprobada",
         "Rechazada",
-        "Cerrada"
+        "Cerrada",
+        "Cancelada"
       ),
       allowNull: false,
     },
