@@ -1,32 +1,87 @@
-import { Op } from "sequelize";
-import { Approver } from "../models/Approver.js";
-import { User } from "../models/User.js";
-import { transporter } from "../utils/nodemailer.js";
+import { PurchaseOrder } from "../models/PurchaseOrder.js";
 import { ApprovalEvent } from "../models/ApprovalEvent.js";
+import { transporter } from "../utils/nodemailer.js";
+import { approvePoOptions } from "../utils/emailOptions.js";
+import { Oeuvre } from "../models/Oeuvre.js";
+import { getApproversOrderedByRole } from "./approver.service.js";
+import { sequelize } from "../database/database.js";
+import { Supplier } from "../models/Supplier.js";
+
+export const generatePurchaseOrderNumber = async (oeuvre_id) => {
+  try {
+    const oeuvre = await Oeuvre.findByPk(oeuvre_id, {
+      attributes: ["ceco_code"],
+    });
+    if (!oeuvre) {
+      throw new Error("Oeuvre not found");
+    }
+
+    const lastPurchaseOrder = await PurchaseOrder.findOne({
+      attributes: ["number"],
+      where: {
+        oeuvre_id: oeuvre_id,
+      },
+      order: [["created_at", "DESC"]],
+    });
+
+    let newOrderNumber;
+    if (lastPurchaseOrder) {
+      const lastNumber = parseInt(
+        lastPurchaseOrder.number.split("-").pop(),
+        10
+      );
+      newOrderNumber = `OC-${oeuvre.ceco_code}-${lastNumber + 1}`;
+    } else {
+      newOrderNumber = `OC-${oeuvre.ceco_code}-1`;
+    }
+
+    if (!newOrderNumber) {
+      throw new Error("Error al generar el número de la orden de compra");
+    }
+
+    return newOrderNumber;
+  } catch (error) {
+    console.error(error);
+    throw new Error(
+      `Error al generar el número de la orden de compra: ${error.message}`
+    );
+  }
+};
+
+export const getPurchaseOrderWithSupplierInfo = async (id) => {
+  try {
+    const purchaseOrder = await PurchaseOrder.findByPk(id, {
+      attributes: {
+        include: [
+          [sequelize.col("supplier.supplier_rut"), "supplier_rut"],
+          [sequelize.col("supplier.supplier_name"), "supplier_name"],
+        ],
+      },
+      include: [
+        {
+          model: Supplier,
+          as: "supplier",
+          attributes: [],
+          required: false,
+        },
+      ],
+    });
+
+    if (!purchaseOrder) throw new Error("Orden de compra no encontrada");
+
+    return purchaseOrder;
+  } catch (error) {
+    console.error(error);
+    throw new Error(`Error al obtener orden de compra: ${error.message}`);
+  }
+};
 
 export const sendPurchaseOrderForApprovalService = async (
   purchaseOrder,
   submittedBy
 ) => {
   try {
-    const approvers = await Approver.findAll({
-      where: {
-        id_oeuvre: purchaseOrder?.oeuvre_id,
-        is_active: true,
-        approver_role: {
-          [Op.or]: ["approver1", "approver2", "approver3", "approver4"],
-        },
-      },
-      include: {
-        model: User,
-        attributes: ["email", "full_name"],
-      },
-      order: [["approver_role", "ASC"]],
-    });
-
-    if (approvers.length === 0) {
-      throw new Error("No se encontraron aprobadores activos.");
-    }
+    const approvers = await getApproversOrderedByRole(purchaseOrder.oeuvre_id);
 
     let currentApprover;
     const isSubmitterAnApprover = approvers.find(
@@ -49,22 +104,18 @@ export const sendPurchaseOrderForApprovalService = async (
         current_approver_id: currentApprover.id,
       });
 
-      const mailOptions = {
-        from: `"Admin" ${process.env.EMAIL}`,
-        to: currentApprover.user.email,
-        subject: "Notificación de Aprobación de Orden de Compra",
-        html: `Hola ${currentApprover?.user?.full_name},<br><br>
-          Tienes una orden de compra para aprobar. Por favor, revisa la <strong>${purchaseOrder.number}</strong>.<br><br>
-          Gracias,<br>El equipo de administración.`,
-      };
+      const mailTo = currentApprover?.user;
 
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          console.log(error);
-        } else {
-          console.log("Correo enviado: " + info.response);
+      transporter.sendMail(
+        approvePoOptions(mailTo, purchaseOrder?.number),
+        (error, info) => {
+          if (error) {
+            console.log(error);
+          } else {
+            console.log("Correo enviado: " + info.response);
+          }
         }
-      });
+      );
 
       await ApprovalEvent.create({
         author: submittedBy,
@@ -72,7 +123,7 @@ export const sendPurchaseOrderForApprovalService = async (
         purchase_order_id: purchaseOrder.id,
       });
 
-      return { message: "Orden de compra enviada a aprobación!" };
+      return { message: "OC enviada a aprobación exitosamente" };
     } else {
       const purchaseOrderUpdated = await purchaseOrder.update({
         status: "Aprobada",
@@ -87,7 +138,7 @@ export const sendPurchaseOrderForApprovalService = async (
       });
 
       return {
-        message: "Orden de compra aprobada exitosamente",
+        message: "OC aprobada exitosamente",
         purchaseOrder: purchaseOrderUpdated,
       };
     }
