@@ -4,46 +4,25 @@ import { PurchaseOrder } from "../models/PurchaseOrder.js";
 import { PurchaseOrderItem } from "../models/PurchaseOrderItem.js";
 import { AccountCost } from "../models/AccountCost.js";
 import { Supplier } from "../models/Supplier.js";
-import { sendPurchaseOrderForApprovalService } from "../services/purchaseOrder.service.js";
+import {
+  generatePurchaseOrderNumber,
+  getPurchaseOrderWithSupplierInfo,
+  sendPurchaseOrderForApprovalService,
+} from "../services/purchaseOrder.service.js";
+import { getApproversOrderedByRole } from "../services/approver.service.js";
 import { ApprovalEvent } from "../models/ApprovalEvent.js";
 import { User } from "../models/User.js";
 import { Approver } from "../models/Approver.js";
 import { sequelize } from "../database/database.js";
 import { validatePoItems } from "../utils/validatePoItems.js";
+import { transporter } from "../utils/nodemailer.js";
+import { rejectPoOptions } from "../utils/emailOptions.js";
 
 export const savePurchaseOrder = async (req, res) => {
   try {
     const { oeuvre_id, items, status, submittedBy, ...rest } = req.body;
 
-    const oeuvre = await Oeuvre.findByPk(oeuvre_id, {
-      attributes: ["ceco_code"],
-    });
-    if (!oeuvre) {
-      throw new Error("Oeuvre not found");
-    }
-
-    const lastPurchaseOrder = await PurchaseOrder.findOne({
-      attributes: ["number"],
-      where: {
-        oeuvre_id: oeuvre_id,
-      },
-      order: [["created_at", "DESC"]],
-    });
-
-    let newOrderNumber;
-    if (lastPurchaseOrder) {
-      const lastNumber = parseInt(
-        lastPurchaseOrder.number.split("-").pop(),
-        10
-      );
-      newOrderNumber = `OC-${oeuvre.ceco_code}-${lastNumber + 1}`;
-    } else {
-      newOrderNumber = `OC-${oeuvre.ceco_code}-1`;
-    }
-
-    if (!newOrderNumber) {
-      throw new Error("Error al generar el número de la orden de compra");
-    }
+    const newOrderNumber = await generatePurchaseOrderNumber(oeuvre_id);
 
     const newPurchaseOrder = await PurchaseOrder.create({
       ...rest,
@@ -186,22 +165,7 @@ export const sendPurchaseOrderForApproval = async (req, res) => {
     const { id } = req.params;
     const { submittedBy } = req.body;
 
-    const purchaseOrder = await PurchaseOrder.findByPk(id, {
-      attributes: {
-        include: [
-          [sequelize.col("supplier.supplier_rut"), "supplier_rut"],
-          [sequelize.col("supplier.supplier_name"), "supplier_name"],
-        ],
-      },
-      include: [
-        {
-          model: Supplier,
-          as: "supplier",
-          attributes: [],
-          required: false,
-        },
-      ],
-    });
+    const purchaseOrder = await getPurchaseOrderWithSupplierInfo(id);
     if (!purchaseOrder) {
       return res.status(404).json({ message: "Orden de compra no encontrada" });
     }
@@ -239,6 +203,11 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
           as: "supplier",
           attributes: [],
           required: false,
+        },
+        {
+          model: Approver,
+          as: "current_approver",
+          attributes: ["user_id"],
         },
       ],
       order: [["created_at", "DESC"]],
@@ -323,7 +292,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
     if (includeEvents) {
       const approvalEvents = await ApprovalEvent.findAll({
         where: { purchase_order_id: purchaseOrder.id },
-        attributes: ["id", "status", "created_at"],
+        attributes: ["id", "status", "created_at", "comments"],
         include: [
           {
             model: User,
@@ -359,6 +328,74 @@ export const getPurchaseOrderByNumber = async (req, res) => {
     }
 
     return res.status(200).json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const rejectPurchaseOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejectedBy, comments } = req.body;
+
+    const purchaseOrder = await getPurchaseOrderWithSupplierInfo(id);
+    const approvers = await getApproversOrderedByRole(purchaseOrder.oeuvre_id);
+
+    let currentApprover;
+    if (approvers?.length > 0) {
+      const currentApproverIndex = approvers.findIndex(
+        (approver) => approver.user_id === rejectedBy
+      );
+      currentApprover = approvers[currentApproverIndex - 1] || null;
+    }
+
+    let mailTo = {
+      email: currentApprover?.user?.email,
+      full_name: currentApprover?.user?.full_name,
+    };
+    if (!currentApprover) {
+      const userCreate = await User.findByPk(purchaseOrder.user_create, {
+        attributes: ["email", "full_name"],
+      });
+
+      mailTo = { email: userCreate.email, full_name: userCreate.full_name };
+    }
+
+    if (mailTo) {
+      await purchaseOrder.update({
+        user_update: rejectedBy,
+        status: "Rechazada",
+        current_approver_id: currentApprover?.id || null,
+      });
+
+      await ApprovalEvent.create({
+        author: rejectedBy,
+        status: "Rechazada",
+        purchase_order_id: purchaseOrder.id,
+        comments,
+      });
+
+      transporter.sendMail(
+        rejectPoOptions(mailTo, purchaseOrder?.number, comments),
+        (error, info) => {
+          if (error) {
+            console.log(error);
+          } else {
+            console.log("Correo enviado: " + info.response);
+          }
+        }
+      );
+
+      return res.status(200).json({
+        purchaseOrder,
+        message: `Orden de compra rechazada exitosamente`,
+      });
+    }
+
+    return res.status(400).json({
+      message: `Ocurrió un error al intentar rechazar la orden de compra`,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });

@@ -19,6 +19,13 @@ export const ApprovalEvent = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    comments: {
+      type: DataTypes.STRING,
+    },
+    purchase_order_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
   },
   {
     timestamps: true,
