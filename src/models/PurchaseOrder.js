@@ -35,9 +35,12 @@ export const PurchaseOrder = sequelize.define(
     },
     exchange_rate: {
       type: DataTypes.DECIMAL,
+      allowNull: false,
+      defaultValue: 1,
     },
     discount: {
       type: DataTypes.DECIMAL,
+      defaultValue: 0,
     },
     net_total: {
       type: DataTypes.DECIMAL,
@@ -47,6 +50,15 @@ export const PurchaseOrder = sequelize.define(
     },
     total: {
       type: DataTypes.DECIMAL,
+    },
+    receipt_discount: {
+      type: DataTypes.DECIMAL,
+      defaultValue: 0,
+    },
+    received_amount: {
+      type: DataTypes.DECIMAL,
+      allowNull: false,
+      defaultValue: 0,
     },
     current_approver_id: {
       type: DataTypes.INTEGER,
@@ -63,9 +75,6 @@ export const PurchaseOrder = sequelize.define(
       allowNull: false,
     },
     approval_date: {
-      type: DataTypes.DATE,
-    },
-    reception_date: {
       type: DataTypes.DATE,
     },
     user_create: {
