@@ -1,5 +1,4 @@
 import { GeneralItem } from "../models/GeneralItem.js";
-import { Oeuvre } from "../models/Oeuvre.js";
 import { PurchaseOrder } from "../models/PurchaseOrder.js";
 import { PurchaseOrderItem } from "../models/PurchaseOrderItem.js";
 import { AccountCost } from "../models/AccountCost.js";
@@ -17,6 +16,7 @@ import { sequelize } from "../database/database.js";
 import { validatePoItems } from "../utils/validatePoItems.js";
 import { transporter } from "../utils/nodemailer.js";
 import { rejectPoOptions } from "../utils/emailOptions.js";
+import { Receipt } from "../models/Receipt.js";
 
 export const savePurchaseOrder = async (req, res) => {
   try {
@@ -213,7 +213,11 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
       order: [["created_at", "DESC"]],
     });
 
-    return res.status(200).json(purchaseOrders);
+    if (purchaseOrders?.length > 0) {
+      return res.status(200).json(purchaseOrders);
+    }
+
+    return res.status(204).json({ message: "No se encontraron resultados" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
@@ -263,6 +267,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
           as: "items",
           attributes: [
             "id",
+            "purchase_order_id",
             "general_item_id",
             "description",
             "account_costs_id",
@@ -270,6 +275,11 @@ export const getPurchaseOrderByNumber = async (req, res) => {
             "quantity",
             "unit_price",
             "subtotal",
+            "total_received_quantity",
+            "total_received_amount",
+            "quantity_to_receive",
+            "amount_to_receive",
+            "receipt_status",
           ],
           include: [
             {
@@ -421,6 +431,109 @@ export const cancelPurchaseOrder = async (req, res) => {
       newStatus,
       message: `Orden de compra ${newStatus?.toLocaleLowerCase()} exitosamente`,
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const receivePurchaseOrder = async (req, res) => {
+  try {
+    const { items, discount, net_total, ...rest } = req.body;
+
+    if (items?.length > 0) {
+      const purchaseOrderId = items[0].purchase_order_id;
+
+      for (const item of items) {
+        if (item.received_quantity > 0 && item.received_amount > 0) {
+          const existingItem = await PurchaseOrderItem.findOne({
+            where: { id: item.id },
+          });
+
+          if (existingItem) {
+            const {
+              quantity,
+              subtotal,
+              total_received_quantity,
+              total_received_amount,
+            } = existingItem;
+
+            const newTotalReceivedQuantity =
+              parseInt(total_received_quantity) +
+              parseInt(item.received_quantity);
+
+            const newTotalReceivedAmount =
+              parseFloat(total_received_amount) +
+              parseFloat(item.received_amount);
+            let newReceiptStatus;
+
+            const newQuantityToReceive =
+              parseInt(quantity) - parseInt(newTotalReceivedQuantity);
+            const newAmountToReceive =
+              parseFloat(subtotal) - parseFloat(newTotalReceivedAmount);
+
+            if (newTotalReceivedAmount === 0) {
+              newReceiptStatus = "Sin recepción";
+            } else if (newQuantityToReceive > 0 && newAmountToReceive > 0) {
+              newReceiptStatus = "Recepción parcial";
+            } else if (newQuantityToReceive === 0 && newAmountToReceive === 0) {
+              newReceiptStatus = "Recepción completa";
+            }
+
+            await PurchaseOrderItem.update(
+              {
+                total_received_quantity: newTotalReceivedQuantity,
+                total_received_amount: newTotalReceivedAmount,
+                receipt_status: newReceiptStatus,
+                quantity_to_receive: newQuantityToReceive,
+                amount_to_receive: newAmountToReceive,
+              },
+              {
+                where: { id: item.id },
+              }
+            );
+
+            const iva = parseFloat(item.received_amount) * 0.19;
+            const total = parseFloat(item.received_amount) + iva;
+
+            await Receipt.create({
+              ...rest,
+              purchase_order_item_id: item.id,
+              purchase_order_id: purchaseOrderId,
+              net_total: parseFloat(item.received_amount),
+              iva,
+              total,
+            });
+          } else {
+            return res.status(400).json({
+              message: `No se encontró el item ${item.id} en la base de datos`,
+            });
+          }
+        }
+      }
+
+      const purchaseOrder = await PurchaseOrder.findByPk(purchaseOrderId, {
+        attributes: ["id", "receipt_discount", "received_amount"],
+      });
+      if (!purchaseOrder) {
+        throw new Error(`OC con id ${purchaseOrderId} no encontrada`);
+      }
+
+      let newReceiptDiscount = parseFloat(purchaseOrder.receipt_discount);
+      let newReceivedAmount =
+        parseFloat(purchaseOrder.received_amount) + parseFloat(net_total);
+
+      if (discount) {
+        newReceiptDiscount += parseFloat(discount);
+      }
+
+      await purchaseOrder.update({
+        receipt_discount: newReceiptDiscount,
+        received_amount: newReceivedAmount,
+      });
+
+      return res.status(200).json({ message: `OC recibida exitosamente` });
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });

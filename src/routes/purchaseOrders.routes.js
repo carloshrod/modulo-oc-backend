@@ -3,6 +3,7 @@ import {
   cancelPurchaseOrder,
   getPurchaseOrderByNumber,
   getPurchaseOrdersByOeuvre,
+  receivePurchaseOrder,
   rejectPurchaseOrder,
   savePurchaseOrder,
   sendPurchaseOrderForApproval,
@@ -19,5 +20,6 @@ router.put("/:id", validatePurchaseOrder, updatePurchaseOrder);
 router.patch("/:id", sendPurchaseOrderForApproval);
 router.patch("/reject/:id", rejectPurchaseOrder);
 router.delete("/:id", cancelPurchaseOrder);
+router.post("/receive", receivePurchaseOrder);
 
 export default router;
