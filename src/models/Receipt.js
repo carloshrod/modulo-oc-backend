@@ -14,6 +14,10 @@ export const Receipt = sequelize.define(
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
+		purchase_order_id: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+		},
 		receipt_date: {
 			type: DataTypes.DATE,
 			allowNull: false,
@@ -32,7 +36,7 @@ export const Receipt = sequelize.define(
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
-		invoice_status: {
+		status: {
 			type: DataTypes.ENUM(
 				'Recepción sin factura',
 				'Recepción con factura',
@@ -44,7 +48,10 @@ export const Receipt = sequelize.define(
 		invoice_number: {
 			type: DataTypes.STRING,
 		},
-		net_total: {
+		received_quantity: {
+			type: DataTypes.INTEGER,
+		},
+		received_amount: {
 			type: DataTypes.DECIMAL,
 		},
 		iva: {
@@ -62,7 +69,7 @@ export const Receipt = sequelize.define(
 );
 
 Receipt.beforeCreate((instance, options) => {
-	instance.invoice_status =
+	instance.status =
 		instance.doc_type === 'Factura'
 			? 'Recepción con factura'
 			: 'Recepción sin factura';
@@ -72,5 +79,6 @@ Receipt.beforeCreate((instance, options) => {
 
 Receipt.belongsTo(PurchaseOrderItem, {
 	foreignKey: 'purchase_order_item_id',
+	as: 'item',
 	targetKey: 'id',
 });

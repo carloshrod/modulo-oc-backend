@@ -217,7 +217,7 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
 			return res.status(200).json(purchaseOrders);
 		}
 
-		return res.status(204).json({ message: 'No se encontraron resultados' });
+		return res.status(204).send();
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: error.message });
@@ -500,7 +500,8 @@ export const receivePurchaseOrder = async (req, res) => {
 							...rest,
 							purchase_order_item_id: item.id,
 							purchase_order_id: purchaseOrderId,
-							net_total: parseFloat(item.received_amount),
+							received_quantity: parseFloat(item.received_quantity),
+							received_amount: parseFloat(item.received_amount),
 							iva,
 							total,
 						});
@@ -513,23 +514,25 @@ export const receivePurchaseOrder = async (req, res) => {
 			}
 
 			const purchaseOrder = await PurchaseOrder.findByPk(purchaseOrderId, {
-				attributes: ['id', 'receipt_discount', 'received_amount'],
+				attributes: ['id', 'total_receipt_discount', 'total_received_amount'],
 			});
 			if (!purchaseOrder) {
 				throw new Error(`OC con id ${purchaseOrderId} no encontrada`);
 			}
 
-			let newReceiptDiscount = parseFloat(purchaseOrder.receipt_discount);
-			const newReceivedAmount =
-				parseFloat(purchaseOrder.received_amount) + parseFloat(net_total);
+			let newTotalReceiptDiscount = parseFloat(
+				purchaseOrder.total_receipt_discount,
+			);
+			const newTotalReceivedAmount =
+				parseFloat(purchaseOrder.total_received_amount) + parseFloat(net_total);
 
 			if (discount) {
-				newReceiptDiscount += parseFloat(discount);
+				newTotalReceiptDiscount += parseFloat(discount);
 			}
 
 			await purchaseOrder.update({
-				receipt_discount: newReceiptDiscount,
-				received_amount: newReceivedAmount,
+				total_receipt_discount: newTotalReceiptDiscount,
+				total_received_amount: newTotalReceivedAmount,
 			});
 
 			return res.status(200).json({ message: `OC recibida exitosamente` });
