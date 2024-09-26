@@ -227,11 +227,11 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
 
 export const getPurchaseOrderByNumber = async (req, res) => {
 	try {
-		const { poNumber } = req.params;
+		const { oeuvreId, poNumber } = req.params;
 		const includeEvents = req.query.includeEvents === 'true';
 
 		const purchaseOrder = await PurchaseOrder.findOne({
-			where: { number: poNumber.replace('oc', 'OC') },
+			where: { oeuvre_id: oeuvreId, number: poNumber.replace('oc', 'OC') },
 			attributes: [
 				'id',
 				'oeuvre_id',
