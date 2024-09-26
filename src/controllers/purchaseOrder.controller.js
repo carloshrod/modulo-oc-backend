@@ -18,6 +18,7 @@ import { transporter } from '../utils/nodemailer.js';
 import { rejectPoOptions } from '../utils/emailOptions.js';
 import { ItemReceipt } from '../models/ItemReceipt.js';
 import { Receipt } from '../models/Receipt.js';
+import { Oeuvre } from '../models/Oeuvre.js';
 
 export const savePurchaseOrder = async (req, res) => {
 	try {
@@ -387,16 +388,27 @@ export const rejectPurchaseOrder = async (req, res) => {
 				comments,
 			});
 
-			transporter.sendMail(
-				rejectPoOptions(mailTo, purchaseOrder?.number, comments),
-				(error, info) => {
-					if (error) {
-						console.log(error);
-					} else {
-						console.log('Correo enviado: ' + info.response);
-					}
-				},
-			);
+			const oeuvre = await Oeuvre.findByPk(purchaseOrder.oeuvre_id, {
+				attributes: ['id', 'oeuvre_name'],
+			});
+			if (!oeuvre) {
+				throw new Error('Oeuvre not found');
+			}
+
+			const data = {
+				mailTo,
+				poNumber: purchaseOrder?.number,
+				oeuvreName: oeuvre?.oeuvre_name,
+				comments,
+			};
+
+			transporter.sendMail(rejectPoOptions(data), (error, info) => {
+				if (error) {
+					console.log(error);
+				} else {
+					console.log('Correo enviado: ' + info.response);
+				}
+			});
 
 			return res.status(200).json({
 				purchaseOrder,

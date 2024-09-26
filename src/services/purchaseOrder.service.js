@@ -102,18 +102,25 @@ export const sendPurchaseOrderForApprovalService = async (
 				current_approver_id: currentApprover.id,
 			});
 
-			const mailTo = currentApprover?.user;
+			const oeuvre = await Oeuvre.findByPk(purchaseOrder.oeuvre_id, {
+				attributes: ['id', 'oeuvre_name'],
+			});
+			if (!oeuvre) {
+				throw new Error('Oeuvre not found');
+			}
+			const data = {
+				mailTo: currentApprover?.user,
+				poNumber: purchaseOrder?.number,
+				oeuvreName: oeuvre?.oeuvre_name,
+			};
 
-			transporter.sendMail(
-				approvePoOptions(mailTo, purchaseOrder?.number),
-				(error, info) => {
-					if (error) {
-						console.log(error);
-					} else {
-						console.log('Correo enviado: ' + info.response);
-					}
-				},
-			);
+			transporter.sendMail(approvePoOptions(data), (error, info) => {
+				if (error) {
+					console.log(error);
+				} else {
+					console.log('Correo enviado: ' + info.response);
+				}
+			});
 
 			await ApprovalEvent.create({
 				author: submittedBy,
