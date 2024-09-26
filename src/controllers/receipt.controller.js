@@ -1,11 +1,11 @@
 import { GeneralItem } from '../models/GeneralItem.js';
+import { ItemReceipt } from '../models/ItemReceipt.js';
 import { PurchaseOrderItem } from '../models/PurchaseOrderItem.js';
-import { Receipt } from '../models/Receipt.js';
 
 export const getReceiptsByPurchaseOrder = async (req, res) => {
 	try {
 		const { poId } = req.params;
-		const receipts = await Receipt.findAll({
+		const receipts = await ItemReceipt.findAll({
 			where: { purchase_order_id: poId },
 			include: [
 				{
@@ -47,7 +47,7 @@ export const addInvoice = async (req, res) => {
 		const { id } = req.params;
 		const { invoice_number } = req.body;
 
-		const receipt = await Receipt.update(
+		const receipt = await ItemReceipt.update(
 			{ invoice_number, status: 'Recepción con factura' },
 			{ where: { id } },
 		);

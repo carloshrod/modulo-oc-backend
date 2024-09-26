@@ -4,7 +4,7 @@ import { PurchaseOrderItem } from './PurchaseOrderItem.js';
 import { User } from './User.js';
 import { ApprovalEvent } from './ApprovalEvent.js';
 import { Approver } from './Approver.js';
-import { Receipt } from './Receipt.js';
+import { ItemReceipt } from './ItemReceipt.js';
 
 export const PurchaseOrder = sequelize.define(
 	'purchase_orders',
@@ -107,8 +107,8 @@ PurchaseOrder.hasMany(PurchaseOrderItem, {
 	onDelete: 'CASCADE',
 });
 
-PurchaseOrder.hasMany(Receipt, {
-	as: 'receipts',
+PurchaseOrder.hasMany(ItemReceipt, {
+	as: 'itemReceipts',
 	foreignKey: 'purchase_order_id',
 	sourceKey: 'id',
 	onDelete: 'CASCADE',

@@ -16,6 +16,7 @@ import { sequelize } from '../database/database.js';
 import { validatePoItems } from '../utils/validatePoItems.js';
 import { transporter } from '../utils/nodemailer.js';
 import { rejectPoOptions } from '../utils/emailOptions.js';
+import { ItemReceipt } from '../models/ItemReceipt.js';
 import { Receipt } from '../models/Receipt.js';
 
 export const savePurchaseOrder = async (req, res) => {
@@ -439,12 +440,27 @@ export const cancelPurchaseOrder = async (req, res) => {
 
 export const receivePurchaseOrder = async (req, res) => {
 	try {
+		const transaction = await sequelize.transaction();
 		const { items, discount, net_total, ...rest } = req.body;
 
 		if (items?.length > 0) {
 			const purchaseOrderId = items[0].purchase_order_id;
 
-			for (const item of items) {
+			const receipt = await Receipt.create(
+				{
+					purchase_order_id: purchaseOrderId,
+					receipt_discount: discount || 0,
+					received_amount: net_total,
+				},
+				{ transaction },
+			);
+			if (!receipt) {
+				throw new Error(
+					`Error al crear la recepción para la OC con id ${purchaseOrderId}`,
+				);
+			}
+
+			for (const [index, item] of items.entries()) {
 				if (item.received_quantity > 0 && item.received_amount > 0) {
 					const existingItem = await PurchaseOrderItem.findOne({
 						where: { id: item.id },
@@ -490,21 +506,33 @@ export const receivePurchaseOrder = async (req, res) => {
 							},
 							{
 								where: { id: item.id },
+								transaction,
 							},
 						);
 
+						let itemReceiptDiscount = 0;
+						let receivedAmount = parseFloat(item.received_amount);
+						if (index === 0 && discount) {
+							itemReceiptDiscount = parseFloat(discount);
+							receivedAmount += itemReceiptDiscount;
+						}
 						const iva = parseFloat(item.received_amount) * 0.19;
 						const total = parseFloat(item.received_amount) + iva;
 
-						await Receipt.create({
-							...rest,
-							purchase_order_item_id: item.id,
-							purchase_order_id: purchaseOrderId,
-							received_quantity: parseFloat(item.received_quantity),
-							received_amount: parseFloat(item.received_amount),
-							iva,
-							total,
-						});
+						await ItemReceipt.create(
+							{
+								...rest,
+								purchase_order_item_id: item.id,
+								purchase_order_id: purchaseOrderId,
+								receipt_id: receipt.id,
+								received_quantity: parseFloat(item.received_quantity),
+								receipt_discount: itemReceiptDiscount,
+								received_amount: receivedAmount,
+								iva,
+								total,
+							},
+							{ transaction },
+						);
 					} else {
 						return res.status(400).json({
 							message: `No se encontró el item ${item.id} en la base de datos`,
@@ -513,9 +541,13 @@ export const receivePurchaseOrder = async (req, res) => {
 				}
 			}
 
-			const purchaseOrder = await PurchaseOrder.findByPk(purchaseOrderId, {
-				attributes: ['id', 'total_receipt_discount', 'total_received_amount'],
-			});
+			const purchaseOrder = await PurchaseOrder.findByPk(
+				purchaseOrderId,
+				{
+					attributes: ['id', 'total_receipt_discount', 'total_received_amount'],
+				},
+				{ transaction },
+			);
 			if (!purchaseOrder) {
 				throw new Error(`OC con id ${purchaseOrderId} no encontrada`);
 			}
@@ -530,11 +562,15 @@ export const receivePurchaseOrder = async (req, res) => {
 				newTotalReceiptDiscount += parseFloat(discount);
 			}
 
-			await purchaseOrder.update({
-				total_receipt_discount: newTotalReceiptDiscount,
-				total_received_amount: newTotalReceivedAmount,
-			});
+			await purchaseOrder.update(
+				{
+					total_receipt_discount: newTotalReceiptDiscount,
+					total_received_amount: newTotalReceivedAmount,
+				},
+				{ transaction },
+			);
 
+			await transaction.commit();
 			return res.status(200).json({ message: `OC recibida exitosamente` });
 		}
 	} catch (error) {
