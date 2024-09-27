@@ -251,6 +251,8 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 				'iva',
 				'total',
 				'status',
+				'total_received_amount',
+				'created_at',
 			],
 			include: [
 				{
@@ -472,7 +474,7 @@ export const receivePurchaseOrder = async (req, res) => {
 				);
 			}
 
-			for (const [index, item] of items.entries()) {
+			for (const item of items) {
 				if (item.received_quantity > 0 && item.received_amount > 0) {
 					const existingItem = await PurchaseOrderItem.findOne({
 						where: { id: item.id },
@@ -522,12 +524,6 @@ export const receivePurchaseOrder = async (req, res) => {
 							},
 						);
 
-						let itemReceiptDiscount = 0;
-						let receivedAmount = parseFloat(item.received_amount);
-						if (index === 0 && discount) {
-							itemReceiptDiscount = parseFloat(discount);
-							receivedAmount += itemReceiptDiscount;
-						}
 						const iva = parseFloat(item.received_amount) * 0.19;
 						const total = parseFloat(item.received_amount) + iva;
 
@@ -538,8 +534,7 @@ export const receivePurchaseOrder = async (req, res) => {
 								purchase_order_id: purchaseOrderId,
 								receipt_id: receipt.id,
 								received_quantity: parseFloat(item.received_quantity),
-								receipt_discount: itemReceiptDiscount,
-								received_amount: receivedAmount,
+								received_amount: parseFloat(item.received_amount),
 								iva,
 								total,
 							},
