@@ -56,10 +56,6 @@ export const ItemReceipt = sequelize.define(
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
-		receipt_discount: {
-			type: DataTypes.DECIMAL,
-			defaultValue: 0,
-		},
 		received_amount: {
 			type: DataTypes.DECIMAL,
 			allowNull: false,

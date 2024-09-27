@@ -100,6 +100,26 @@ export const PurchaseOrder = sequelize.define(
 	},
 );
 
+PurchaseOrder.beforeCreate((instance, options) => {
+	if (instance.discount < 0) {
+		instance.discount = Math.abs(instance.discount);
+	}
+
+	if (instance.total_receipt_discount < 0) {
+		instance.total_receipt_discount = Math.abs(instance.total_receipt_discount);
+	}
+});
+
+PurchaseOrder.beforeUpdate((instance, options) => {
+	if (instance.discount < 0) {
+		instance.discount = Math.abs(instance.discount);
+	}
+
+	if (instance.total_receipt_discount < 0) {
+		instance.total_receipt_discount = Math.abs(instance.total_receipt_discount);
+	}
+});
+
 PurchaseOrder.hasMany(PurchaseOrderItem, {
 	as: 'items',
 	foreignKey: 'purchase_order_id',

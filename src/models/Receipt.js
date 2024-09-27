@@ -32,6 +32,18 @@ export const Receipt = sequelize.define(
 	},
 );
 
+Receipt.beforeCreate((instance, options) => {
+	if (instance.receipt_discount < 0) {
+		instance.receipt_discount = Math.abs(instance.receipt_discount);
+	}
+});
+
+Receipt.beforeUpdate((instance, options) => {
+	if (instance.receipt_discount < 0) {
+		instance.receipt_discount = Math.abs(instance.receipt_discount);
+	}
+});
+
 Receipt.hasMany(ItemReceipt, {
 	foreignKey: 'receipt_id',
 	as: 'itemReceipts',
