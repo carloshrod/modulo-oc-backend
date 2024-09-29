@@ -36,9 +36,12 @@ router.get('/api/v1/suppliers', async (_req, res) => {
 	}
 });
 
-router.get('/api/v1/account-costs', async (_req, res) => {
+router.get('/api/v1/account-costs/:idCompany', async (req, res) => {
 	try {
+		const { idCompany } = req.params;
+
 		const accountCosts = await FamiliesAccountCost.findAll({
+			where: { id_company: idCompany },
 			attributes: [
 				'id',
 				[sequelize.col('families_account_costs.name'), 'family_name'],
@@ -46,7 +49,7 @@ router.get('/api/v1/account-costs', async (_req, res) => {
 			include: [
 				{
 					model: AccountCost,
-					attributes: ['id', 'name'],
+					attributes: ['id', 'identifier', 'name'],
 					as: 'accounts',
 				},
 			],
