@@ -190,6 +190,8 @@ export const sendPurchaseOrderForApproval = async (req, res) => {
 export const getPurchaseOrdersByOeuvre = async (req, res) => {
 	try {
 		const { oeuvreId } = req.params;
+		const includeItems = req.query.includeItems === 'true';
+		const includeItemReceipts = req.query.includeItemReceipts === 'true';
 
 		const purchaseOrders = await PurchaseOrder.findAll({
 			where: { oeuvre_id: oeuvreId },
@@ -201,6 +203,12 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
 			},
 			include: [
 				{
+					model: Oeuvre,
+					as: 'oeuvre',
+					attributes: ['id', 'oeuvre_name'],
+					required: false,
+				},
+				{
 					model: Supplier,
 					as: 'supplier',
 					attributes: [],
@@ -211,6 +219,86 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
 					as: 'current_approver',
 					attributes: ['user_id'],
 				},
+				...(includeItems
+					? [
+							{
+								model: PurchaseOrderItem,
+								as: 'items',
+								attributes: [
+									'id',
+									'purchase_order_id',
+									'general_item_id',
+									'description',
+									'account_costs_id',
+									'measurement_unit',
+									'quantity',
+									'unit_price',
+									'subtotal',
+									'total_received_quantity',
+									'total_received_amount',
+									'quantity_to_receive',
+									'amount_to_receive',
+									'receipt_status',
+								],
+								include: [
+									{
+										model: GeneralItem,
+										attributes: ['name', 'sku'],
+									},
+									{
+										model: AccountCost,
+										attributes: ['identifier'],
+									},
+								],
+								order: [['created_at', 'ASC']],
+								required: false,
+							},
+						]
+					: []),
+				...(includeItemReceipts
+					? [
+							{
+								model: ItemReceipt,
+								as: 'itemReceipts',
+								attributes: [
+									'id',
+									'purchase_order_item_id',
+									'created_at',
+									'receipt_date',
+									'doc_type',
+									'doc_number',
+									'status',
+									'received_quantity',
+									'received_amount',
+								],
+								include: [
+									{
+										model: PurchaseOrderItem,
+										as: 'item',
+										attributes: [
+											'id',
+											'general_item_id',
+											'description',
+											'measurement_unit',
+											'unit_price',
+										],
+										include: [
+											{
+												model: GeneralItem,
+												attributes: ['name', 'sku'],
+											},
+											{
+												model: AccountCost,
+												attributes: ['identifier', 'name'],
+											},
+										],
+									},
+								],
+								order: [['created_at', 'ASC']],
+								required: false,
+							},
+						]
+					: []),
 			],
 			order: [['created_at', 'DESC']],
 		});
