@@ -1,11 +1,9 @@
-import Sequelize from "sequelize";
+import Sequelize from 'sequelize';
+import { env } from '../config/env.js';
 
-export const sequelize = new Sequelize(
-  "conprojecto_db_test",
-  "postgres",
-  "C4rl05_Pg",
-  {
-    host: "localhost",
-    dialect: "postgres",
-  }
-);
+const { DB_NAME, DB_HOST, DB_PASSWORD, DB_USER } = env;
+
+export const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+	host: DB_HOST,
+	dialect: 'postgres',
+});
