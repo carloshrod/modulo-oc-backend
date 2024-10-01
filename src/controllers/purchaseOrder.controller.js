@@ -19,6 +19,7 @@ import { rejectPoOptions } from '../utils/emailOptions.js';
 import { ItemReceipt } from '../models/ItemReceipt.js';
 import { Receipt } from '../models/Receipt.js';
 import { Oeuvre } from '../models/Oeuvre.js';
+import { Company } from '../models/Company.js';
 
 export const savePurchaseOrder = async (req, res) => {
 	try {
@@ -335,14 +336,30 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 				'currency_type',
 				'exchange_rate',
 				'discount',
+				'total_receipt_discount',
 				'net_total',
 				'iva',
 				'total',
 				'status',
 				'total_received_amount',
 				'created_at',
+				'approval_date',
 			],
 			include: [
+				{
+					model: Oeuvre,
+					as: 'oeuvre',
+					attributes: ['id', 'oeuvre_name', 'oeuvre_address', 'admin_name'],
+					include: [
+						{
+							model: Company,
+							as: 'company',
+							attributes: ['id', 'image_url', 'business_name', 'rut'],
+							required: false,
+						},
+					],
+					required: false,
+				},
 				{
 					model: Approver,
 					as: 'current_approver',
@@ -380,7 +397,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 						},
 						{
 							model: AccountCost,
-							attributes: ['name'],
+							attributes: ['name', 'identifier'],
 						},
 					],
 					order: [['created_at', 'ASC']],
@@ -425,6 +442,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 					item_name: item.general_item?.name,
 					item_sku: item.general_item?.sku,
 					account_cost_name: item.account_cost?.name,
+					account_cost_identifier: item.account_cost?.identifier,
 				};
 			});
 		}
