@@ -92,6 +92,10 @@ export const PurchaseOrder = sequelize.define(
 		supplier_id: {
 			type: DataTypes.INTEGER,
 		},
+		attachments: {
+			type: DataTypes.JSONB,
+			defaultValue: [],
+		},
 	},
 	{
 		timestamps: true,

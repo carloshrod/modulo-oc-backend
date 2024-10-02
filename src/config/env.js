@@ -10,4 +10,6 @@ export const env = {
 	EMAIL_PASSWORD: process.env.EMAIL_PASSWORD,
 	CLIENT_HOST: process.env.CLIENT_HOST,
 	NODE_ENV: process.env.NODE_ENV,
+	BUCKET_NAME: process.env.BUCKET_NAME,
+	ENDPOINT: process.env.ENDPOINT,
 };

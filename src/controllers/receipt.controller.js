@@ -172,6 +172,7 @@ export const cancelReceipt = async (req, res) => {
 		);
 
 		await transaction.commit();
+
 		return res.status(200).json({ message: 'Recepción anulada exitosamente' });
 	} catch (error) {
 		console.error(error);

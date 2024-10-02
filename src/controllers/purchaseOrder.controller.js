@@ -20,12 +20,16 @@ import { ItemReceipt } from '../models/ItemReceipt.js';
 import { Receipt } from '../models/Receipt.js';
 import { Oeuvre } from '../models/Oeuvre.js';
 import { Company } from '../models/Company.js';
+import { uploadFiles } from '../utils/uploadFiles.js';
 
 export const savePurchaseOrder = async (req, res) => {
 	try {
 		const { oeuvre_id, items, status, submittedBy, ...rest } = req.body;
+		const { files } = req?.files ?? {};
 
 		const newOrderNumber = await generatePurchaseOrderNumber(oeuvre_id);
+
+		const attachments = await uploadFiles(files);
 
 		const newPurchaseOrder = await PurchaseOrder.create({
 			...rest,
@@ -35,6 +39,7 @@ export const savePurchaseOrder = async (req, res) => {
 			reception_date: null,
 			user_create: submittedBy,
 			status,
+			attachments,
 		});
 
 		const itemIds = [];
@@ -86,14 +91,29 @@ export const savePurchaseOrder = async (req, res) => {
 export const updatePurchaseOrder = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const { items, submittedBy, ...rest } = req.body;
+		const { items, submittedBy, filesToKeep, ...rest } = req.body;
+		const { files } = req?.files ?? {};
 
 		const purchaseOrder = await PurchaseOrder.findByPk(id);
 		if (!purchaseOrder) {
 			return res.status(404).json({ message: 'Orden de compra no encontrada' });
 		}
 
-		await purchaseOrder.update({ ...rest, user_update: submittedBy });
+		const newAttachments = await uploadFiles(files);
+
+		const currentAttachments = purchaseOrder.attachments || [];
+
+		const attachmentsToKeep = currentAttachments.filter(attachment =>
+			filesToKeep.includes(attachment.id),
+		);
+
+		const combinedAttachments = [...attachmentsToKeep, ...newAttachments];
+
+		await purchaseOrder.update({
+			...rest,
+			user_update: submittedBy,
+			attachments: combinedAttachments,
+		});
 
 		const existingItems = await PurchaseOrderItem.findAll({
 			where: { purchase_order_id: id },
@@ -344,6 +364,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 				'total_received_amount',
 				'created_at',
 				'approval_date',
+				'attachments',
 			],
 			include: [
 				{

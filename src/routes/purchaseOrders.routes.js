@@ -10,13 +10,14 @@ import {
 	updatePurchaseOrder,
 } from '../controllers/purchaseOrder.controller.js';
 import { validatePurchaseOrder } from '../middlewares/validatePurchaseOrder.js';
+import { sanitizeBody } from '../middlewares/sanitizeBody.js';
 
 const router = Router();
 
-router.post('/', validatePurchaseOrder, savePurchaseOrder);
+router.post('/', sanitizeBody, validatePurchaseOrder, savePurchaseOrder);
 router.get('/:oeuvreId', getPurchaseOrdersByOeuvre);
 router.get('/:oeuvreId/:poNumber', getPurchaseOrderByNumber);
-router.put('/:id', validatePurchaseOrder, updatePurchaseOrder);
+router.put('/:id', sanitizeBody, validatePurchaseOrder, updatePurchaseOrder);
 router.patch('/:id', sendPurchaseOrderForApproval);
 router.patch('/reject/:id', rejectPurchaseOrder);
 router.delete('/:id', cancelPurchaseOrder);
