@@ -69,8 +69,8 @@ export const addInvoice = async (req, res) => {
 };
 
 export const cancelReceipt = async (req, res) => {
+	const transaction = await sequelize.transaction();
 	try {
-		const transaction = await sequelize.transaction();
 		const { id } = req.params;
 
 		const itemReceipt = await ItemReceipt.findByPk(id);
@@ -138,7 +138,10 @@ export const cancelReceipt = async (req, res) => {
 		const newReceivedAmount =
 			parseFloat(receipt.received_amount) -
 			parseFloat(itemReceipt.received_amount);
-		await receipt.update({ received_amount: newReceivedAmount });
+		await receipt.update(
+			{ received_amount: newReceivedAmount },
+			{ transaction },
+		);
 
 		// purchase_order updates
 		const itemReceipts = await ItemReceipt.findAll({
@@ -150,11 +153,9 @@ export const cancelReceipt = async (req, res) => {
 			},
 		});
 		const isLastItemReceipt = itemReceipts?.length === 1;
-		console.log({ isLastItemReceipt });
 		const receiptDiscount = isLastItemReceipt
 			? parseFloat(receipt.receipt_discount)
 			: 0;
-		console.log({ receiptDiscount });
 
 		const newTotalReceiptDiscount =
 			parseFloat(purchaseOrder.total_receipt_discount) - receiptDiscount;
@@ -175,6 +176,7 @@ export const cancelReceipt = async (req, res) => {
 
 		return res.status(200).json({ message: 'Recepción anulada exitosamente' });
 	} catch (error) {
+		await transaction.rollback();
 		console.error(error);
 		res.status(500).json({ message: error.message });
 	}
