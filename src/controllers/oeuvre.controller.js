@@ -7,7 +7,12 @@ export const getAllOeuvres = async (_req, res) => {
 			attributes: ['id', 'oeuvre_name', 'id_company'],
 			order: [['id', 'ASC']],
 		});
-		res.status(200).json(oeuvres);
+
+		if (oeuvres?.length > 0) {
+			return res.status(200).json(oeuvres);
+		}
+
+		return res.status(204).send();
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: error.message });
@@ -27,7 +32,9 @@ export const getOeuvreByName = async (req, res) => {
 			},
 			attributes: ['id', 'oeuvre_name', 'id_company'],
 		});
-		res.status(200).json(oeuvre);
+		if (!oeuvre) throw new Error(`No se encontró la obra ${name}`);
+
+		return res.status(200).json(oeuvre);
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: error.message });
