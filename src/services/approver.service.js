@@ -19,7 +19,7 @@ export const getApproversOrderedByRole = async oeuvre_id => {
 			order: [['approver_role', 'ASC']],
 		});
 
-		if (approvers.length === 0) {
+		if (approvers?.length === 0) {
 			throw new Error('No se encontraron aprobadores activos');
 		}
 

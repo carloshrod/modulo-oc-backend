@@ -19,7 +19,6 @@ export const sanitizeBody = (req, res, next) => {
 				body[key] = parseFloat(body[key]);
 			}
 		}
-		console.log(body);
 		next();
 	} catch (error) {
 		console.error(error);

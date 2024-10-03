@@ -1,17 +1,16 @@
-import { GeneralItem } from '../models/GeneralItem.js';
 import { PurchaseOrder } from '../models/PurchaseOrder.js';
 import { PurchaseOrderItem } from '../models/PurchaseOrderItem.js';
-import { AccountCost } from '../models/AccountCost.js';
-import { Supplier } from '../models/Supplier.js';
 import {
+	buildPurchaseOrderByNumberInclude,
+	buildPurchaseOrdersIncludes,
 	generatePurchaseOrderNumber,
 	getPurchaseOrderWithSupplierInfo,
+	processPurchaseOrderResult,
 	sendPurchaseOrderForApprovalService,
 } from '../services/purchaseOrder.service.js';
 import { getApproversOrderedByRole } from '../services/approver.service.js';
 import { ApprovalEvent } from '../models/ApprovalEvent.js';
 import { User } from '../models/User.js';
-import { Approver } from '../models/Approver.js';
 import { sequelize } from '../database/database.js';
 import { validatePoItems } from '../utils/validatePoItems.js';
 import { transporter } from '../utils/nodemailer.js';
@@ -19,10 +18,17 @@ import { rejectPoOptions } from '../utils/emailOptions.js';
 import { ItemReceipt } from '../models/ItemReceipt.js';
 import { Receipt } from '../models/Receipt.js';
 import { Oeuvre } from '../models/Oeuvre.js';
-import { Company } from '../models/Company.js';
-import { uploadFiles } from '../utils/uploadFiles.js';
+import {
+	createNewItems,
+	updateItems,
+} from '../services/purchaseOrderItem.service.js';
+import {
+	generateUpdatedAttachments,
+	uploadFiles,
+} from '../services/file.service.js';
 
 export const savePurchaseOrder = async (req, res) => {
+	const transaction = await sequelize.transaction();
 	try {
 		const { oeuvre_id, items, status, submittedBy, ...rest } = req.body;
 		const { files } = req?.files ?? {};
@@ -31,32 +37,29 @@ export const savePurchaseOrder = async (req, res) => {
 
 		const attachments = await uploadFiles(files);
 
-		const newPurchaseOrder = await PurchaseOrder.create({
-			...rest,
-			number: newOrderNumber,
-			oeuvre_id,
-			approval_date: null,
-			reception_date: null,
-			user_create: submittedBy,
-			status,
-			attachments,
-		});
+		const newPurchaseOrder = await PurchaseOrder.create(
+			{
+				...rest,
+				number: newOrderNumber,
+				oeuvre_id,
+				approval_date: null,
+				reception_date: null,
+				user_create: submittedBy,
+				status,
+				attachments,
+			},
+			{ transaction },
+		);
 
-		const itemIds = [];
+		let itemIds = [];
 		if (items?.length > 0) {
 			const validItems = validatePoItems(items);
 
 			if (validItems?.length > 0) {
-				await Promise.all(
-					items.map(async item => {
-						const newItem = await PurchaseOrderItem.create({
-							...item,
-							purchase_order_id: newPurchaseOrder.id,
-							subtotal: item.subtotal === 0 ? undefined : item.subtotal,
-						});
-						itemIds.push(newItem.id);
-						return newItem;
-					}),
+				itemIds = await createNewItems(
+					items,
+					newPurchaseOrder?.id,
+					transaction,
 				);
 			}
 		}
@@ -65,7 +68,11 @@ export const savePurchaseOrder = async (req, res) => {
 			const response = await sendPurchaseOrderForApprovalService(
 				newPurchaseOrder,
 				submittedBy,
+				transaction,
 			);
+
+			await transaction.commit();
+
 			return res.status(200).json({
 				message: response.message,
 				purchaseOrder: {
@@ -75,6 +82,8 @@ export const savePurchaseOrder = async (req, res) => {
 			});
 		}
 
+		await transaction.commit();
+
 		return res.status(200).json({
 			message: 'Orden de compra guardada como borrador!',
 			purchaseOrder: {
@@ -83,12 +92,14 @@ export const savePurchaseOrder = async (req, res) => {
 			},
 		});
 	} catch (error) {
+		await transaction.rollback();
 		console.error(error);
 		res.status(500).json({ message: error.message });
 	}
 };
 
 export const updatePurchaseOrder = async (req, res) => {
+	const transaction = await sequelize.transaction();
 	try {
 		const { id } = req.params;
 		const { items, submittedBy, filesToKeep, ...rest } = req.body;
@@ -99,46 +110,31 @@ export const updatePurchaseOrder = async (req, res) => {
 			return res.status(404).json({ message: 'Orden de compra no encontrada' });
 		}
 
-		const newAttachments = await uploadFiles(files);
-
-		const currentAttachments = purchaseOrder.attachments || [];
-
-		const attachmentsToKeep = currentAttachments.filter(attachment =>
-			filesToKeep.includes(attachment.id),
+		const updatedAttachments = await generateUpdatedAttachments(
+			files,
+			purchaseOrder,
+			filesToKeep,
 		);
 
-		const combinedAttachments = [...attachmentsToKeep, ...newAttachments];
-
-		await purchaseOrder.update({
-			...rest,
-			user_update: submittedBy,
-			attachments: combinedAttachments,
-		});
+		await purchaseOrder.update(
+			{
+				...rest,
+				user_update: submittedBy,
+				attachments: updatedAttachments,
+			},
+			{ transaction },
+		);
 
 		const existingItems = await PurchaseOrderItem.findAll({
 			where: { purchase_order_id: id },
 		});
 
-		const itemIds = [];
+		let itemIds = [];
 		if (items?.length > 0) {
 			const validItems = validatePoItems(items);
 
 			if (validItems?.length > 0) {
-				for (const item of validItems) {
-					if (item?.id) {
-						await PurchaseOrderItem.update(
-							{ ...item },
-							{ where: { id: item.id } },
-						);
-						itemIds.push(item.id);
-					} else {
-						const newItem = await PurchaseOrderItem.create({
-							...item,
-							purchase_order_id: purchaseOrder.id,
-						});
-						itemIds.push(newItem.id);
-					}
-				}
+				itemIds = await updateItems(validItems, purchaseOrder?.id, transaction);
 			}
 		} else {
 			if (existingItems?.length > 0) {
@@ -160,7 +156,11 @@ export const updatePurchaseOrder = async (req, res) => {
 			const response = await sendPurchaseOrderForApprovalService(
 				purchaseOrder,
 				submittedBy,
+				transaction,
 			);
+
+			await transaction.commit();
+
 			return res.status(200).json({
 				message: response.message,
 				purchaseOrder: {
@@ -170,6 +170,8 @@ export const updatePurchaseOrder = async (req, res) => {
 			});
 		}
 
+		await transaction.commit();
+
 		return res.status(200).json({
 			message: 'Orden de compra guardada como borrador!',
 			purchaseOrder: {
@@ -178,12 +180,14 @@ export const updatePurchaseOrder = async (req, res) => {
 			},
 		});
 	} catch (error) {
+		await transaction.rollback();
 		console.error(error);
 		res.status(500).json({ message: error.message });
 	}
 };
 
 export const sendPurchaseOrderForApproval = async (req, res) => {
+	const transaction = await sequelize.transaction();
 	try {
 		const { id } = req.params;
 		const { submittedBy } = req.body;
@@ -196,13 +200,17 @@ export const sendPurchaseOrderForApproval = async (req, res) => {
 		const response = await sendPurchaseOrderForApprovalService(
 			purchaseOrder,
 			submittedBy,
+			transaction,
 		);
+
+		await transaction.commit();
 
 		return res.status(200).json({
 			message: response.message,
 			purchaseOrder,
 		});
 	} catch (error) {
+		await transaction.rollback();
 		console.error(error);
 		res.status(500).json({ message: error.message });
 	}
@@ -214,6 +222,11 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
 		const includeItems = req.query.includeItems === 'true';
 		const includeItemReceipts = req.query.includeItemReceipts === 'true';
 
+		const includes = buildPurchaseOrdersIncludes(
+			includeItems,
+			includeItemReceipts,
+		);
+
 		const purchaseOrders = await PurchaseOrder.findAll({
 			where: { oeuvre_id: oeuvreId },
 			attributes: {
@@ -222,105 +235,7 @@ export const getPurchaseOrdersByOeuvre = async (req, res) => {
 					[sequelize.col('supplier.supplier_name'), 'supplier_name'],
 				],
 			},
-			include: [
-				{
-					model: Oeuvre,
-					as: 'oeuvre',
-					attributes: ['id', 'oeuvre_name'],
-					required: false,
-				},
-				{
-					model: Supplier,
-					as: 'supplier',
-					attributes: [],
-					required: false,
-				},
-				{
-					model: Approver,
-					as: 'current_approver',
-					attributes: ['user_id'],
-				},
-				...(includeItems
-					? [
-							{
-								model: PurchaseOrderItem,
-								as: 'items',
-								attributes: [
-									'id',
-									'purchase_order_id',
-									'general_item_id',
-									'description',
-									'account_costs_id',
-									'measurement_unit',
-									'quantity',
-									'unit_price',
-									'subtotal',
-									'total_received_quantity',
-									'total_received_amount',
-									'quantity_to_receive',
-									'amount_to_receive',
-									'receipt_status',
-								],
-								include: [
-									{
-										model: GeneralItem,
-										attributes: ['name', 'sku'],
-									},
-									{
-										model: AccountCost,
-										attributes: ['identifier'],
-									},
-								],
-								order: [['created_at', 'ASC']],
-								required: false,
-							},
-						]
-					: []),
-				...(includeItemReceipts
-					? [
-							{
-								model: ItemReceipt,
-								as: 'itemReceipts',
-								attributes: [
-									'id',
-									'purchase_order_item_id',
-									'created_at',
-									'receipt_date',
-									'doc_type',
-									'doc_number',
-									'status',
-									'received_quantity',
-									'received_amount',
-								],
-								include: [
-									{
-										model: PurchaseOrderItem,
-										as: 'item',
-										attributes: [
-											'id',
-											'general_item_id',
-											'description',
-											'measurement_unit',
-											'unit_price',
-										],
-										include: [
-											{
-												model: GeneralItem,
-												attributes: ['name', 'sku'],
-											},
-											{
-												model: AccountCost,
-												attributes: ['identifier', 'name'],
-											},
-										],
-									},
-								],
-								order: [['created_at', 'ASC']],
-								required: false,
-							},
-						]
-					: []),
-			],
+			include: includes,
 			order: [['created_at', 'DESC']],
 		});
 
@@ -366,107 +281,13 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 				'approval_date',
 				'attachments',
 			],
-			include: [
-				{
-					model: Oeuvre,
-					as: 'oeuvre',
-					attributes: ['id', 'oeuvre_name', 'oeuvre_address', 'admin_name'],
-					include: [
-						{
-							model: Company,
-							as: 'company',
-							attributes: ['id', 'image_url', 'business_name', 'rut'],
-							required: false,
-						},
-					],
-					required: false,
-				},
-				{
-					model: Approver,
-					as: 'current_approver',
-					attributes: ['user_id'],
-				},
-				{
-					model: Supplier,
-					as: 'supplier',
-					attributes: [],
-					required: false,
-				},
-				{
-					model: PurchaseOrderItem,
-					as: 'items',
-					attributes: [
-						'id',
-						'purchase_order_id',
-						'general_item_id',
-						'description',
-						'account_costs_id',
-						'measurement_unit',
-						'quantity',
-						'unit_price',
-						'subtotal',
-						'total_received_quantity',
-						'total_received_amount',
-						'quantity_to_receive',
-						'amount_to_receive',
-						'receipt_status',
-					],
-					include: [
-						{
-							model: GeneralItem,
-							attributes: ['name', 'sku'],
-						},
-						{
-							model: AccountCost,
-							attributes: ['name', 'identifier'],
-						},
-					],
-					order: [['created_at', 'ASC']],
-					required: false,
-				},
-			],
+			include: buildPurchaseOrderByNumberInclude(),
 		});
 
-		const result = purchaseOrder.toJSON();
-
-		if (includeEvents) {
-			const approvalEvents = await ApprovalEvent.findAll({
-				where: { purchase_order_id: purchaseOrder.id },
-				attributes: ['id', 'status', 'created_at', 'comments'],
-				include: [
-					{
-						model: User,
-						attributes: ['email', 'full_name'],
-					},
-					{
-						model: Approver,
-						as: 'approver_details',
-						attributes: ['approver_role'],
-					},
-				],
-				order: [['created_at', 'ASC']],
-			});
-
-			result.events = approvalEvents;
-		}
-
-		if (result.current_approver) {
-			result.current_approver = result.current_approver.user_id;
-		}
-
-		if (result.items) {
-			result.items = result.items.map(item => {
-				const { general_item, account_cost, ...rest } = item;
-
-				return {
-					...rest,
-					item_name: item.general_item?.name,
-					item_sku: item.general_item?.sku,
-					account_cost_name: item.account_cost?.name,
-					account_cost_identifier: item.account_cost?.identifier,
-				};
-			});
-		}
+		const result = await processPurchaseOrderResult(
+			purchaseOrder,
+			includeEvents,
+		);
 
 		return res.status(200).json(result);
 	} catch (error) {
@@ -476,6 +297,7 @@ export const getPurchaseOrderByNumber = async (req, res) => {
 };
 
 export const rejectPurchaseOrder = async (req, res) => {
+	const transaction = await sequelize.transaction();
 	try {
 		const { id } = req.params;
 		const { rejectedBy, comments } = req.body;
@@ -483,19 +305,19 @@ export const rejectPurchaseOrder = async (req, res) => {
 		const purchaseOrder = await getPurchaseOrderWithSupplierInfo(id);
 		const approvers = await getApproversOrderedByRole(purchaseOrder.oeuvre_id);
 
-		let currentApprover;
+		let currentUserResponsible;
 		if (approvers?.length > 0) {
 			const currentApproverIndex = approvers.findIndex(
 				approver => approver.user_id === rejectedBy,
 			);
-			currentApprover = approvers[currentApproverIndex - 1] || null;
+			currentUserResponsible = approvers[currentApproverIndex - 1] || null;
 		}
 
 		let mailTo = {
-			email: currentApprover?.user?.email,
-			full_name: currentApprover?.user?.full_name,
+			email: currentUserResponsible?.user?.email,
+			full_name: currentUserResponsible?.user?.full_name,
 		};
-		if (!currentApprover) {
+		if (!currentUserResponsible) {
 			const userCreate = await User.findByPk(purchaseOrder.user_create, {
 				attributes: ['email', 'full_name'],
 			});
@@ -504,18 +326,24 @@ export const rejectPurchaseOrder = async (req, res) => {
 		}
 
 		if (mailTo) {
-			await purchaseOrder.update({
-				user_update: rejectedBy,
-				status: 'Rechazada',
-				current_approver_id: currentApprover?.id || null,
-			});
+			await purchaseOrder.update(
+				{
+					user_update: rejectedBy,
+					status: 'Rechazada',
+					current_approver_id: currentUserResponsible?.id || null,
+				},
+				{ transaction },
+			);
 
-			await ApprovalEvent.create({
-				author: rejectedBy,
-				status: 'Rechazada',
-				purchase_order_id: purchaseOrder.id,
-				comments,
-			});
+			await ApprovalEvent.create(
+				{
+					author: rejectedBy,
+					status: 'Rechazada',
+					purchase_order_id: purchaseOrder.id,
+					comments,
+				},
+				{ transaction },
+			);
 
 			const oeuvre = await Oeuvre.findByPk(purchaseOrder.oeuvre_id, {
 				attributes: ['id', 'oeuvre_name'],
@@ -539,6 +367,8 @@ export const rejectPurchaseOrder = async (req, res) => {
 				}
 			});
 
+			await transaction.commit();
+
 			return res.status(200).json({
 				purchaseOrder,
 				message: `Orden de compra rechazada exitosamente`,
@@ -549,6 +379,7 @@ export const rejectPurchaseOrder = async (req, res) => {
 			message: `Ocurrió un error al intentar rechazar la orden de compra`,
 		});
 	} catch (error) {
+		await transaction.rollback();
 		console.error(error);
 		res.status(500).json({ message: error.message });
 	}
@@ -580,8 +411,8 @@ export const cancelPurchaseOrder = async (req, res) => {
 };
 
 export const receivePurchaseOrder = async (req, res) => {
+	const transaction = await sequelize.transaction();
 	try {
-		const transaction = await sequelize.transaction();
 		const { items, discount, net_total, ...rest } = req.body;
 
 		if (items?.length > 0) {
@@ -708,6 +539,7 @@ export const receivePurchaseOrder = async (req, res) => {
 			return res.status(200).json({ message: `OC recibida exitosamente` });
 		}
 	} catch (error) {
+		await transaction.rollback();
 		console.error(error);
 		res.status(500).json({ message: error.message });
 	}
