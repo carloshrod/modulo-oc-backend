@@ -11,6 +11,7 @@ import {
 } from '../controllers/purchaseOrder.controller.js';
 import { validatePurchaseOrder } from '../middlewares/validatePurchaseOrder.js';
 import { sanitizeBody } from '../middlewares/sanitizeBody.js';
+import { validateReceipts } from '../middlewares/validateReceipts.js';
 
 const router = Router();
 
@@ -21,6 +22,6 @@ router.put('/:id', sanitizeBody, validatePurchaseOrder, updatePurchaseOrder);
 router.patch('/:id', sendPurchaseOrderForApproval);
 router.patch('/reject/:id', rejectPurchaseOrder);
 router.delete('/:id', cancelPurchaseOrder);
-router.post('/receive', receivePurchaseOrder);
+router.post('/receive', validateReceipts, receivePurchaseOrder);
 
 export default router;
