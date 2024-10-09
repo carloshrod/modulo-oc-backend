@@ -70,6 +70,27 @@ PurchaseOrderItem.beforeCreate((instance, options) => {
 	instance.amount_to_receive = instance.subtotal || 0;
 });
 
+const setReceiptStatus = instance => {
+	if (instance.total_received_amount === 0) {
+		instance.receipt_status = 'Sin recepción';
+	} else if (
+		instance.total_received_amount > 0 &&
+		instance.total_received_amount < instance.subtotal
+	) {
+		instance.receipt_status = 'Recepción parcial';
+	} else if (instance.total_received_amount === instance.subtotal) {
+		instance.receipt_status = 'Recepción completa';
+	}
+};
+
+PurchaseOrderItem.beforeCreate((instance, options) => {
+	setReceiptStatus(instance);
+});
+
+PurchaseOrderItem.beforeUpdate((instance, options) => {
+	setReceiptStatus(instance);
+});
+
 PurchaseOrderItem.belongsTo(GeneralItem, {
 	foreignKey: 'general_item_id',
 	targetkey: 'id',
